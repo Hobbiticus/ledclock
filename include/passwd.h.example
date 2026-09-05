@@ -1,0 +1,4 @@
+#define MY_SSID "ssid"
+#define MY_WIFI_PASSWORD "pwd"
+#define MQTT_USER "hauser"
+#define MQTT_PASSWORD "hapasswd"
