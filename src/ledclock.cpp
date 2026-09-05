@@ -3,14 +3,14 @@
 #define DATA_PIN 1
 #define CLOCK_PIN 2
 
-const static unsigned char STC = 1 << 0;
-const static unsigned char STL = 1 << 1;
-const static unsigned char STR = 1 << 2;
-const static unsigned char SMC = 1 << 3;
-const static unsigned char SBL = 1 << 4;
-const static unsigned char SBR = 1 << 5;
-const static unsigned char SBC = 1 << 6;
-const static unsigned char DOT = 1 << 7;
+const static unsigned char STC = 1 << 0; //top center
+const static unsigned char STL = 1 << 1; //top left
+const static unsigned char STR = 1 << 2; //top right
+const static unsigned char SMC = 1 << 3; //middle center
+const static unsigned char SBL = 1 << 4; //bottom left
+const static unsigned char SBR = 1 << 5; //bottom right
+const static unsigned char SBC = 1 << 6; //bottom center
+const static unsigned char DOT = 1 << 7; //decimal point
 
 const static unsigned char NumberMap[10] =
 {
@@ -36,8 +36,9 @@ void setup()
 
 void loop()
 {
-  shiftIn(DATA_PIN, CLOCK_PIN, NumberMap[digit]);
-  shiftIn(DATA_PIN, CLOCK_PIN, NumberMap[digit]);
+  unsigned char dots = digit % 2 == 0 ? DOT : 0;
+  shiftIn(DATA_PIN, CLOCK_PIN, NumberMap[digit] | dots);
+  shiftIn(DATA_PIN, CLOCK_PIN, NumberMap[digit] | dots);
 
   digit++;
   if (digit > 9)
