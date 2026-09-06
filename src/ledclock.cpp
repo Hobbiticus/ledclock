@@ -1,4 +1,5 @@
 #include <Arduino.h>
+//#include <ESP8266WiFi.h>
 #include <WiFi.h>
 #include <ezTime.h>
 #include "passwd.h"
@@ -7,8 +8,11 @@
 
 Timezone myTZ;
 
-#define DATA_PIN 1
-#define CLOCK_PIN 2
+#define CLR_PIN 21
+#define LATCH_PIN 19
+#define ENABLE_PIN 18
+#define DATA_PIN 17
+#define CLOCK_PIN 16
 
 const static unsigned char STC = 1 << 0; //top center
 const static unsigned char STL = 1 << 1; //top left
@@ -33,11 +37,28 @@ STC | STL | STR | SMC | SBL | SBR | SBC, //8
 STC | STL | STR | SMC | SBL | SBC        //9
 };
 
+const int ledPin = 16; // Choose any GPIO pin
+const int freq = 5000; // 5 kHz
+const int resolution = 8; // 8-bit (0-255)
+const int ledChannel = 0;
+
 unsigned char digit = 0;
 void setup()
 {
+  Serial.begin(115200);
+  pinMode(CLR_PIN, OUTPUT);
   pinMode(DATA_PIN, OUTPUT);
   pinMode(CLOCK_PIN, OUTPUT);
+  pinMode(LATCH_PIN, OUTPUT);
+  pinMode(ENABLE_PIN, OUTPUT);
+  digitalWrite(CLR_PIN, LOW);
+  ledcSetup(ledChannel, freq, resolution);
+  ledcAttachPin(ENABLE_PIN, ledChannel);
+
+  ledcWrite(ENABLE_PIN, 255);
+
+  //analogWrite(ENABLE_PIN, 255);
+
   digit = 0;
 
 #ifdef DO_NETWORK
@@ -71,21 +92,25 @@ void loop()
   events(); //for ezTime
 
   time_t now = myTZ.now();
-  uint8_t hour = myTZ.hour(now);
-  uint8_t minute = myTZ.minute(now);
+  //uint8_t hour = myTZ.hour(now);
+  //uint8_t minute = myTZ.minute(now);
   uint8_t second = myTZ.second(now);
 
   unsigned char dots = second % 2 == 0 ? DOT : 0;
+  digitalWrite(LATCH_PIN, LOW);
   shiftIn(DATA_PIN, CLOCK_PIN, NumberMap[second / 10] | dots);
   shiftIn(DATA_PIN, CLOCK_PIN, NumberMap[second % 10] | dots);
+  digitalWrite(LATCH_PIN, HIGH);
   delay(250);
   return;
 
-  #else
+#else
 
   unsigned char dots = digit % 2 == 0 ? DOT : 0;
+  digitalWrite(LATCH_PIN, LOW);
   shiftIn(DATA_PIN, CLOCK_PIN, NumberMap[digit] | dots);
   shiftIn(DATA_PIN, CLOCK_PIN, NumberMap[digit] | dots);
+  digitalWrite(LATCH_PIN, HIGH);
 
   digit++;
   if (digit > 9)
