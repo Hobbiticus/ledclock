@@ -8,6 +8,9 @@ public:
 
     void SetTime(int hours, int minutes);
 
+    void StepWifiAnimation();
+    void StepTimeSyncAnimation();
+
 private:
     int m_ClockPin;
     int m_LatchPin;
@@ -17,5 +20,8 @@ private:
     int m_ColonPin;
     int m_ColonChannel;
 
+    int m_AnimationStep;
+
     void ShiftDigit(unsigned char digit);
+    void ShiftOut(unsigned char value);
 };

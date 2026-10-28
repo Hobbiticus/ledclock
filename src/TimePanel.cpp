@@ -2,9 +2,10 @@
 #include <Arduino.h>
 
 TimePanel::TimePanel(int clockPin, int latchPin, int dataPin, int enablePin, int pwmChannel, int colonPin, int colonChannel)
-: m_ClockPin(clockPin), m_LatchPin(latchPin), m_DataPin(dataPin), m_EnablePin(enablePin), m_PWMChannel(pwmChannel), m_ColonPin(colonPin), m_ColonChannel(colonChannel)
+: m_ClockPin(clockPin), m_LatchPin(latchPin), m_DataPin(dataPin),
+m_EnablePin(enablePin), m_PWMChannel(pwmChannel), m_ColonPin(colonPin), m_ColonChannel(colonChannel),
+m_AnimationStep(0)
 {
-
 }
 
 void TimePanel::Init()
@@ -62,4 +63,75 @@ void TimePanel::SetTime(int hours, int minutes)
     // Explicitly pull clock low after shifting finishes, then latch
     digitalWrite(m_ClockPin, LOW);
     digitalWrite(m_LatchPin, HIGH);
+}
+
+void TimePanel::StepWifiAnimation()
+{
+#define WIFI_ANIMATION_STEPS 12
+    static const unsigned char AnimationFrames[WIFI_ANIMATION_STEPS][4] =
+    {
+        {STC, 0, 0, 0},
+        {0, STC, 0, 0},
+        {0, 0, STC, 0},
+        {0, 0, 0, STC},
+        {0, 0, 0, STR},
+        {0, 0, 0, SBR},
+        {0, 0, 0, SBC},
+        {0, 0, SBC, 0},
+        {0, SBC, 0, 0},
+        {SBC, 0, 0, 0},
+        {SBL, 0, 0, 0},
+        {STL, 0, 0, 0}
+    };
+
+    if (m_AnimationStep >= WIFI_ANIMATION_STEPS)
+        m_AnimationStep = 0;
+
+    digitalWrite(m_ClockPin, LOW);
+    digitalWrite(m_LatchPin, LOW);
+
+    ShiftOut(AnimationFrames[m_AnimationStep][0]);
+    ShiftOut(AnimationFrames[m_AnimationStep][1]);
+    ShiftOut(AnimationFrames[m_AnimationStep][2]);
+    ShiftOut(AnimationFrames[m_AnimationStep][3]);
+
+    digitalWrite(m_ClockPin, LOW);
+    digitalWrite(m_LatchPin, HIGH);
+
+    m_AnimationStep++;
+}
+
+void TimePanel::StepTimeSyncAnimation()
+{
+#define TS_ANIMATION_STEPS 5
+    const static unsigned char AnimationFrames[TS_ANIMATION_STEPS][4] =
+    {
+        {SMC, 0, 0, 0},
+        {0, SMC, 0, 0},
+        {0, 0, 0, 0},
+        {0, 0, SMC, 0},
+        {0, 0, 0, SMC}
+    };
+    if (m_AnimationStep >= TS_ANIMATION_STEPS)
+        m_AnimationStep = 0;
+
+    digitalWrite(m_ClockPin, LOW);
+    digitalWrite(m_LatchPin, LOW);
+
+    ShiftOut(AnimationFrames[m_AnimationStep][0]);
+    ShiftOut(AnimationFrames[m_AnimationStep][1]);
+    ShiftOut(AnimationFrames[m_AnimationStep][2]);
+    ShiftOut(AnimationFrames[m_AnimationStep][3]);
+
+    digitalWrite(m_ClockPin, LOW);
+    digitalWrite(m_LatchPin, HIGH);
+
+    ledcWrite(m_ColonChannel, m_AnimationStep == 2 ? 255 : 0);
+
+    m_AnimationStep++;
+}
+
+void TimePanel::ShiftOut(unsigned char val)
+{
+    shiftOut(m_DataPin, m_ClockPin, MSBFIRST, val);
 }

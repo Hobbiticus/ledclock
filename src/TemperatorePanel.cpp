@@ -15,6 +15,8 @@ void TemperaturePanel::Init()
 
     ledcSetup(m_PWMChannel, 5000, 8);
     ledcAttachPin(m_EnablePin, m_PWMChannel);
+
+    UpdateDisplay();
 }
 
 void TemperaturePanel::SetHighLow(int high, int low)
@@ -28,6 +30,10 @@ void TemperaturePanel::SetCurrent(int temp)
 {
     m_Current = temp;
     UpdateDisplay();
+}
+
+void TemperaturePanel::StepAnimation()
+{
 }
 
 const static unsigned char STC = 1 << 1; //top center

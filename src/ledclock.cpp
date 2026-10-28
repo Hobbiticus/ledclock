@@ -6,7 +6,7 @@
 #include "TimePanel.h"
 #include "TemperaturePanel.h"
 
-//#define DO_NETWORK
+#define DO_NETWORK
 
 
 //have to consult the points endpoint to get the gridpoints for the forecase
@@ -50,7 +50,9 @@ Weather weather(LATITUDE, LONGITUDE);
 TimePanel timePanel(TIME_CLOCK_PIN, TIME_LATCH_PIN, TIME_DATA_PIN, TIME_ENABLE_PIN, ClockChannel, COLON_PIN, ColonChannel);
 TemperaturePanel tempPanel(TEMP_CLOCK_PIN, TEMP_LATCH_PIN, TEMP_DATA_PIN, TEMP_ENABLE_PIN, TempChannel);
 
-unsigned char digit = 0;
+
+
+
 
 void UpdateForecast()
 {
@@ -59,10 +61,46 @@ void UpdateForecast()
   if (err != Weather::SUCCESS)
   {
     Serial.printf("Failed to fetch forecast: %d\n", err);
+    tempPanel.SetHighLow(-999, -999);
     return;
   }
 
+  tempPanel.SetHighLow(forecast.m_High, forecast.m_Low);
+}
 
+bool ConnectStep()
+{
+  wl_status_t status = WiFi.status();
+  if (status == WL_CONNECTED)
+    return true;
+  if (status == WL_CONNECT_FAILED || status == WL_CONNECTION_LOST)
+  {
+    Serial.printf("Huh? failed to connect? %d\n", status);
+    WiFi.disconnect(true);
+    WiFi.begin(MY_SSID, MY_WIFI_PASSWORD);
+  }
+  return false;
+}
+
+bool WantForecast = false;
+int LastFetchForecastTime = 0;
+
+void CheckOnForecast()
+{
+  if (!WantForecast)
+    return;
+  if (!weather.IsFetchComplete())
+    return;
+  WantForecast = false;
+
+  Forecast forecast;
+  Weather::WeatherError err = weather.GetForecast(forecast);
+  if (err != Weather::SUCCESS)
+  {
+    Serial.printf("Failed to fetch forecast: %d\n", err);
+  }
+  Serial.printf("Fetching forecast returned high = %d, low = %d\n", forecast.m_High, forecast.m_Low);
+  tempPanel.SetHighLow(forecast.m_High, forecast.m_Low);
 }
 
 void setup()
@@ -73,54 +111,67 @@ void setup()
   tempPanel.Init();
 
 #ifdef DO_NETWORK
-    //connect to WiFi
-  while (true)
+  //connect to WiFi
+  Serial.println("Connecting to WiFi...");
+  WiFi.begin(MY_SSID, MY_WIFI_PASSWORD);
+  Serial.println("Waiting for wifi to connect...");
+  while (!ConnectStep())
   {
-    Serial.println("Connecting to WiFi...");
-    WiFi.begin(MY_SSID, MY_WIFI_PASSWORD);
-    Serial.println("Waiting for wifi to connect...");
-    uint8_t result = WiFi.waitForConnectResult();
-    Serial.printf("result = %hhu\n", result);
-    if (result == WL_CONNECTED)
-    {
-      Serial.println("Connected to WiFi!");
-      break;
-    }
-    WiFi.disconnect(true);
+    timePanel.StepWifiAnimation();
+    delay(100);
   }
 
-  UpdateForecast();
+  timePanel.SetTime(0, 0);
+
+  WantForecast = true;
+  weather.BeginFetchForecast();
+  LastFetchForecastTime = millis();
+  //UpdateForecast();
 
   Serial.println("Waiting for time sync...");
   int startTime = millis();
-  waitForSync();
+  while (timeStatus() != timeSet)
+  {
+    CheckOnForecast();
+    timePanel.StepTimeSyncAnimation();
+    delay(100);
+    events();
+  }
   Serial.printf("Sync took %d ms\n", (int)(millis() - startTime));
   myTZ.setLocation("America/New_York");
 
 #endif
 }
 
+
 void loop()
 {
+  if (!WantForecast && weather.GetLastError() != Weather::SUCCESS)
+  {
+    //if there was an error, then retry
+    if (millis() - LastFetchForecastTime > 1000 * 60)
+    {
+      WantForecast = true;
+      weather.BeginFetchForecast();
+      LastFetchForecastTime = millis();
+    }
+  }
 #ifdef DO_NETWORK
   events(); //for ezTime
+  CheckOnForecast();
 
   time_t now = myTZ.now();
-  //uint8_t hour = myTZ.hour(now);
-  //uint8_t minute = myTZ.minute(now);
-  uint8_t second = myTZ.second(now);
-  Serial.printf("%d\n", second);
+  uint8_t hour = myTZ.hour(now);
+  uint8_t minute = myTZ.minute(now);
+  //uint8_t second = myTZ.second(now);
 
-  unsigned char dots = second % 2 == 0 ? DOT : 0;
-  digitalWrite(TIME_LATCH_PIN, LOW);
-  digitalWrite(TIME_CLOCK_PIN, LOW);
-  shiftOut(TIME_DATA_PIN, TIME_CLOCK_PIN, LSBFIRST, NumberMap[second / 10] | dots);
-  shiftOut(TIME_DATA_PIN, TIME_CLOCK_PIN, LSBFIRST, NumberMap[second % 10] | dots);
-  digitalWrite(TIME_LATCH_PIN, HIGH);
-  delay(250);
+  timePanel.SetTime(hour, minute);
+  delay(100);
+
   return;
 
 #else
+`static unsigned char digit = 0;
   Serial.printf("Showing %hhu\n", digit);
 
   ledcWrite(ClockChannel, 127);

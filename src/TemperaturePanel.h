@@ -9,6 +9,8 @@ public:
     void SetHighLow(int high, int low);
     void SetCurrent(int temp);
 
+    void StepAnimation();
+
 private:
     int m_ClockPin;
     int m_LatchPin;

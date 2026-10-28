@@ -11,7 +11,7 @@ struct LatLon
     double m_Lat;
     double m_Lon;
 
-    bool operator<(LatLon& rhs)
+    bool operator<(const LatLon& rhs) const
     {
         if (m_Lat < rhs.m_Lat)
             return true;
@@ -25,6 +25,7 @@ struct Forecast
 {
     int m_High;
     int m_Low;
+    unsigned char m_RainChance;
 };
 
 
@@ -42,7 +43,16 @@ public:
         FAILED_PARSE_FORECAST,
     };
 
-    WeatherError GetForecast(Forecast& forecast);
+    bool BeginFetchForecast();
+    bool IsFetchComplete();
+
+    WeatherError FetchForecast(Forecast& forecast);
+    WeatherError GetForecast(Forecast& forecast) const
+    {
+        forecast = m_CurrentForecast;
+        return m_LastError;
+    }
+    WeatherError GetLastError() const { return m_LastError; }
 
 private:
     double m_Latitude;
@@ -54,8 +64,18 @@ private:
     int m_GridY;
     String m_ForecastURL;
 
+    Forecast m_CurrentForecast;
+    WeatherError m_LastError;
+
     //current polygon served by the latest forecase
     std::set<LatLon> m_Polygon;
 
     WeatherError FetchGridpoints();
+
+    static void sFetchTask(void* arg)
+    {
+        Weather* obj = (Weather*)arg;
+        obj->FetchTask();
+    }
+    void FetchTask();
 };
