@@ -121,8 +121,6 @@ void setup()
     delay(100);
   }
 
-  timePanel.SetTime(0, 0);
-
   WantForecast = true;
   weather.BeginFetchForecast();
   LastFetchForecastTime = millis();
