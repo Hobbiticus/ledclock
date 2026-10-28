@@ -2,3 +2,7 @@
 #define MY_WIFI_PASSWORD "pwd"
 #define MQTT_USER "hauser"
 #define MQTT_PASSWORD "hapasswd"
+
+#define MY_EMAIL "name@service.tld"
+#define LATITUDE 12.3456
+#define LONGITUDE 98.7654
