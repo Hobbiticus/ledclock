@@ -157,10 +157,16 @@ void loop()
   events(); //for ezTime
   CheckOnForecast();
 
-  time_t now = myTZ.now();
-  uint8_t hour = myTZ.hour(now);
-  uint8_t minute = myTZ.minute(now);
+  uint8_t hour = myTZ.hour();
+  uint8_t minute = myTZ.minute();
   //uint8_t second = myTZ.second(now);
+
+  static uint8_t lastMinute = 100;
+  if (lastMinute != minute)
+  {
+    Serial.printf("New time: %02hhu:%02hhu\n", hour, minute);
+    lastMinute = minute;
+  }
 
   timePanel.SetTime(hour, minute);
   delay(100);
@@ -168,7 +174,7 @@ void loop()
   return;
 
 #else
-`static unsigned char digit = 0;
+  static unsigned char digit = 0;
   Serial.printf("Showing %hhu\n", digit);
 
   ledcWrite(ClockChannel, 127);
