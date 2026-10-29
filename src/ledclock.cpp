@@ -124,7 +124,6 @@ void setup()
   WantForecast = true;
   weather.BeginFetchForecast();
   LastFetchForecastTime = millis();
-  //UpdateForecast();
 
   Serial.println("Waiting for time sync...");
   int startTime = millis();

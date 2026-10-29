@@ -143,6 +143,7 @@ Weather::WeatherError Weather::FetchForecast(Forecast& forecast)
         }
     }
 
+    bool haveToday = false;
     JsonArray periods = doc["properties"]["periods"];
     for (int i = 0; i < periods.size(); i++)
     {
@@ -152,10 +153,20 @@ Weather::WeatherError Weather::FetchForecast(Forecast& forecast)
         {
             forecast.m_High = periods[i]["temperature"];
             forecast.m_RainChance = periods[i]["probabilityOfPrecipitation"]["value"];
+            haveToday = true;
         }
         else if (name == "Tonight")
         {
             forecast.m_Low = periods[i]["temperature"];
+            if (haveToday)
+                break;
+            //in the evening, the today/this-afternoon record goes away, so let's grab tomorrow's high
+            //which should be the next record
+            if (i + 1 < periods.size())
+            {
+                forecast.m_High = periods[i+1]["temperature"];
+                forecast.m_RainChance = periods[i+1]["probabilityOfPrecipitation"]["value"];
+            }
             break;
         }
     }
