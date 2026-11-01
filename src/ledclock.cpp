@@ -5,11 +5,12 @@
 #include "Weather.h"
 #include "TimePanel.h"
 #include "TemperaturePanel.h"
+#include <PubSubClient.h>
 
 #define DO_NETWORK
+//TODO: home assistant integration - fetch current temperature
 
-
-//have to consult the points endpoint to get the gridpoints for the forecase
+//have to consult the points endpoint to get the gridpoints for the forecast
 //https://api.weather.gov/points/12.3456,-98.7654
 //this contains the actual forecast - LWX = office, 58,92 = griddpoint
 //https://api.weather.gov/gridpoints/LWX/58,92/forecast
@@ -50,8 +51,8 @@ Weather weather(LATITUDE, LONGITUDE);
 TimePanel timePanel(TIME_CLOCK_PIN, TIME_LATCH_PIN, TIME_DATA_PIN, TIME_ENABLE_PIN, ClockChannel, COLON_PIN, ColonChannel);
 TemperaturePanel tempPanel(TEMP_CLOCK_PIN, TEMP_LATCH_PIN, TEMP_DATA_PIN, TEMP_ENABLE_PIN, TempChannel);
 
-
-
+WiFiClient TCPClient;
+PubSubClient MQTT(TCPClient);
 
 
 void UpdateForecast()
@@ -84,7 +85,8 @@ bool ConnectStep()
 
 bool WantForecast = false;
 int LastFetchForecastTime = 0;
-
+//TODO: track last good forecast update and only clear the display
+//      if it has been a long time
 void CheckOnForecast()
 {
   if (!WantForecast)
@@ -92,15 +94,40 @@ void CheckOnForecast()
   if (!weather.IsFetchComplete())
     return;
   WantForecast = false;
+  tempPanel.StepAnimation();
 
   Forecast forecast;
   Weather::WeatherError err = weather.GetForecast(forecast);
   if (err != Weather::SUCCESS)
   {
     Serial.printf("Failed to fetch forecast: %d\n", err);
+    return;
   }
   Serial.printf("Fetching forecast returned high = %d, low = %d\n", forecast.m_High, forecast.m_Low);
   tempPanel.SetHighLow(forecast.m_High, forecast.m_Low);
+}
+
+void RefreshForecast()
+{
+  WantForecast = true;
+  weather.BeginFetchForecast();
+  LastFetchForecastTime = millis();
+  tempPanel.EnableAnimation(TemperaturePanel::ROW_HIGH | TemperaturePanel::ROW_LOW);
+}
+
+void MQTTCallback(char* topic, byte* payload, unsigned int length)
+{
+  Serial.printf("Received message:\n");
+  for (unsigned int i = 0; i < length; i++)
+    Serial.printf("%02hhx", payload[i]);
+  char tempStr[12] = {0};
+  unsigned int len = sizeof(tempStr) - 1;
+  if (length < len)
+    len = length;
+  memcpy(tempStr, payload, len);
+  double temperature = atof(tempStr);
+  Serial.printf(" = %.1f\n", temperature);
+  tempPanel.SetCurrent((int)(temperature + 0.5));
 }
 
 void setup()
@@ -118,12 +145,25 @@ void setup()
   while (!ConnectStep())
   {
     timePanel.StepWifiAnimation();
+    tempPanel.StepAnimation();
     delay(100);
   }
 
-  WantForecast = true;
-  weather.BeginFetchForecast();
-  LastFetchForecastTime = millis();
+  RefreshForecast();
+
+  tempPanel.EnableAnimation(TemperaturePanel::ROW_CURR);
+  MQTT.setServer(MQTT_SERVER, 1883);
+  MQTT.setCallback(MQTTCallback);
+  Serial.println("Connecting to MQTT...");
+  if (MQTT.connect("Bedroom_Clock", MQTT_USER, MQTT_PASSWORD))
+  {
+    Serial.println("Connected to MQTT!");
+    MQTT.subscribe("mydevs/weather/weather_temperature/stat_t");
+  }
+  else
+  {
+    Serial.println("Failed to connect to mqtt\n");
+  }
 
   Serial.println("Waiting for time sync...");
   int startTime = millis();
@@ -131,6 +171,7 @@ void setup()
   {
     CheckOnForecast();
     timePanel.StepTimeSyncAnimation();
+    tempPanel.StepAnimation();
     delay(100);
     events();
   }
@@ -143,17 +184,34 @@ void setup()
 
 void loop()
 {
-  if (!WantForecast && weather.GetLastError() != Weather::SUCCESS)
+#ifdef DO_NETWORK
+  //TODO: may need to detect being disconnected and attempt to reconnect
+  if (!MQTT.connected())
   {
-    //if there was an error, then retry
-    if (millis() - LastFetchForecastTime > 1000 * 60)
+    static long LastReconnectTime = 0;
+    if (millis() - LastReconnectTime > 5000)
     {
-      WantForecast = true;
-      weather.BeginFetchForecast();
-      LastFetchForecastTime = millis();
+      Serial.println("Attempting to reconnect to MQTT...");
+      LastReconnectTime = millis();
+      if (MQTT.connect("Bedroom_Clock", MQTT_USER, MQTT_PASSWORD))
+      {
+        Serial.println("MQTT Connected!");
+        MQTT.subscribe("mydevs/weather/weather_temperature/stat_t");
+        LastReconnectTime = 0;
+      }
     }
   }
-#ifdef DO_NETWORK
+  MQTT.loop();
+  if (WantForecast)
+  {
+    if (millis() - LastFetchForecastTime > 1000 * 60) //TODO: set this higher in real life
+    {
+      tempPanel.SetHighLow(-999, -999);
+      tempPanel.EnableAnimation(TemperaturePanel::ROW_HIGH | TemperaturePanel:: ROW_LOW);
+    }
+  }
+  tempPanel.StepAnimation();
+
   events(); //for ezTime
   CheckOnForecast();
 
@@ -166,6 +224,14 @@ void loop()
   {
     Serial.printf("New time: %02hhu:%02hhu\n", hour, minute);
     lastMinute = minute;
+    //if (minute == 0 && (hour == 18 || hour == 5))
+    if ((minute % 10) == 0)
+    {
+      Serial.printf("Fetching new forecast at %02hhu:%02hhu\n", hour, minute);
+      WantForecast = true;
+      weather.BeginFetchForecast();
+      LastFetchForecastTime = millis();
+    }
   }
 
   timePanel.SetTime(hour, minute);

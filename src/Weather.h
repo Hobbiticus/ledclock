@@ -41,7 +41,9 @@ public:
         FAILED_PARSE_GRIDPOINTS,
         FAILED_FETCH_FORECAST,
         FAILED_PARSE_FORECAST,
+        FAILED_GRIDPOINTS_CHANGED,
     };
+    const char* ErrorToString(WeatherError err) const;
 
     bool BeginFetchForecast();
     bool IsFetchComplete();
@@ -71,6 +73,7 @@ private:
     std::set<LatLon> m_Polygon;
 
     WeatherError FetchGridpoints();
+    WeatherError FetchActualForecast(Forecast& forecast);
 
     static void sFetchTask(void* arg)
     {

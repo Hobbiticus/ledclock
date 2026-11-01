@@ -35,13 +35,14 @@ Weather::WeatherError Weather::FetchGridpoints()
     }
 
     String payload = http.getString();
-    //Serial.println("GRIDPOINTS:");
-    //Serial.println(payload);
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload);
     if (error)
     {
         Serial.printf("Failed to parse gridpoints: %s\n", error.c_str());
+        Serial.println("==== Gridpoints ====");
+        Serial.println(payload);
+        Serial.println("==== END Gridpoints ====");
         return FAILED_PARSE_GRIDPOINTS;
     }
 
@@ -53,21 +54,8 @@ Weather::WeatherError Weather::FetchGridpoints()
     return SUCCESS;
 }
 
-Weather::WeatherError Weather::FetchForecast(Forecast& forecast)
+Weather::WeatherError Weather::FetchActualForecast(Forecast& forecast)
 {
-    forecast.m_High = -999;
-    forecast.m_Low = -999;
-    forecast.m_RainChance = 0;
-
-    if (m_ForecastURL.isEmpty())
-    {
-        Serial.println("Fetching gridpoints...");
-        Weather::WeatherError err = FetchGridpoints();
-        if (err != SUCCESS)
-            return err;
-    }
-
-    Serial.println("Fetching forecast...");
     HTTPClient http;
     http.begin(m_ForecastURL);
     http.addHeader("User-Agent", USER_AGENT);
@@ -81,12 +69,14 @@ Weather::WeatherError Weather::FetchForecast(Forecast& forecast)
     }
 
     String payload = http.getString();
-    //Serial.println(payload);
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload);
     if (error)
     {
         Serial.printf("Failed to parse forecast: %s\n", error.c_str());
+        Serial.println("==== Forecast JSON ====");
+        Serial.println(payload);
+        Serial.println("==== END Forecast JSON ====");
         return FAILED_PARSE_FORECAST;
     }
     Serial.println("Got forecast");
@@ -105,31 +95,7 @@ Weather::WeatherError Weather::FetchForecast(Forecast& forecast)
                 //not the same - fetch new gridpoints
                 m_Polygon.clear();
                 m_ForecastURL = "";
-                Weather::WeatherError err = FetchGridpoints();
-                if (err != SUCCESS)
-                    return err;
-
-                HTTPClient http;
-                http.begin(m_ForecastURL);
-                http.addHeader("User-Agent", USER_AGENT);
-                http.addHeader("Accept", "application/geo+json");
-
-                int httpResponseCode = http.GET();
-                if (httpResponseCode <= 0)
-                {
-                    Serial.printf("Failed to fetch forecast URL %s : %d\n", m_ForecastURL.c_str(), httpResponseCode);
-                    return FAILED_FETCH_FORECAST;
-                }
-
-                String payload = http.getString();
-                DeserializationError error = deserializeJson(doc, payload);
-                if (error)
-                {
-                    Serial.printf("Failed to parse forecast: %s\n", error.c_str());
-                    return FAILED_PARSE_FORECAST;
-                }
-
-                break;
+                return FAILED_GRIDPOINTS_CHANGED;
             }
         }
     }
@@ -148,6 +114,7 @@ Weather::WeatherError Weather::FetchForecast(Forecast& forecast)
     for (int i = 0; i < periods.size(); i++)
     {
         String name = periods[i]["name"];
+        Serial.printf("Period %d = \"%s\"\n", i, name.c_str());
 
         if (name == "This Afternoon" || name == "Today")
         {
@@ -164,13 +131,48 @@ Weather::WeatherError Weather::FetchForecast(Forecast& forecast)
             //which should be the next record
             if (i + 1 < periods.size())
             {
+                String nextname = periods[i+1]["name"];
+                Serial.printf("Period %d = \"%s\"\n", i+1, nextname.c_str());
                 forecast.m_High = periods[i+1]["temperature"];
                 forecast.m_RainChance = periods[i+1]["probabilityOfPrecipitation"]["value"];
             }
             break;
         }
     }
-    Serial.printf("High = %d, low = %d, precip = %hhu\n", forecast.m_High, forecast.m_Low, forecast.m_RainChance);
+    return SUCCESS;
+}
+
+Weather::WeatherError Weather::FetchForecast(Forecast& forecast)
+{
+    forecast.m_High = -999;
+    forecast.m_Low = -999;
+    forecast.m_RainChance = 0;
+
+    while (m_ForecastURL.isEmpty())
+    {
+        Serial.println("Fetching gridpoints...");
+        Weather::WeatherError err = FetchGridpoints();
+        if (err != SUCCESS)
+        {
+            delay(5000);
+            continue;
+        }
+        break;
+    }
+
+    while (true)
+    {
+        Serial.println("Fetching forecast...");
+        Weather::WeatherError err = FetchActualForecast(forecast);
+        if (err != SUCCESS)
+        {
+            delay(5000);
+            continue;
+        }
+
+        Serial.printf("High = %d, low = %d, precip = %hhu\n", forecast.m_High, forecast.m_Low, forecast.m_RainChance);
+        break;
+    }
 
     return SUCCESS;
 }
@@ -207,4 +209,24 @@ void Weather::FetchTask()
     Serial.println("Fetch task complete");
     FetchComplete = true;
     vTaskDelete(NULL);
+}
+
+const char* Weather::ErrorToString(WeatherError err) const
+{
+    switch (err)
+    {
+        case SUCCESS:
+            return "Success";
+        case FAILED_FETCH_GRIDPOINTS:
+            return "Failed to fetch gridpoints";
+        case FAILED_PARSE_GRIDPOINTS:
+            return "Failed to parse gridpoints";
+        case FAILED_FETCH_FORECAST:
+            return "Failed to fetch forecast";
+        case FAILED_PARSE_FORECAST:
+            return "Failed to parse forecast";
+        case FAILED_GRIDPOINTS_CHANGED:
+            return "Gridpoints changed";
+    }
+    return "???";
 }

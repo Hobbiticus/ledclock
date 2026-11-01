@@ -1,5 +1,6 @@
 #define MY_SSID "ssid"
 #define MY_WIFI_PASSWORD "pwd"
+#define MQTT_SERVER "192.168.1.98"
 #define MQTT_USER "hauser"
 #define MQTT_PASSWORD "hapasswd"
 

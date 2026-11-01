@@ -3,7 +3,8 @@
 
 TemperaturePanel::TemperaturePanel(int clockPin, int latchPin, int dataPin, int enablePin, int pwmChannel)
 : m_ClockPin(clockPin), m_LatchPin(latchPin), m_DataPin(dataPin), m_EnablePin(enablePin), m_PWMChannel(pwmChannel),
-m_High(-100), m_Current(-100), m_Low(-100)
+m_High(-100), m_Current(-100), m_Low(-100),
+m_AnimateRows(0), m_AnimationStep(0)
 {
 
 }
@@ -23,17 +24,15 @@ void TemperaturePanel::SetHighLow(int high, int low)
 {
     m_High = high;
     m_Low = low;
+    m_AnimateRows &= ~(ROW_HIGH | ROW_LOW);
     UpdateDisplay();
 }
 
 void TemperaturePanel::SetCurrent(int temp)
 {
     m_Current = temp;
+    m_AnimateRows &= ~ROW_CURR;
     UpdateDisplay();
-}
-
-void TemperaturePanel::StepAnimation()
-{
 }
 
 const static unsigned char STC = 1 << 1; //top center
@@ -78,6 +77,24 @@ void TemperaturePanel::UpdateDisplay()
 
 void TemperaturePanel::ShiftTemperature(int temp)
 {
+#define ANIMATION_STEPS 10
+    static const unsigned char AnimationFrames[ANIMATION_STEPS][3] =
+    {
+        {0, 0, STC},
+        {0, STC, 0},
+        {STC, 0, 0},
+        {STR, 0, 0},
+        {SBR, 0, 0},
+        {SBC, 0, 0},
+        {0, SBC, 0},
+        {0, 0, SBC},
+        {0, 0, SBL},
+        {0, 0, STL}
+    };
+
+    if (m_AnimationStep >= ANIMATION_STEPS)
+        m_AnimationStep = 0;
+
     //these go right to left
     if (temp > -100)
     {
@@ -96,14 +113,20 @@ void TemperaturePanel::ShiftTemperature(int temp)
     }
     else
     {
-        //blank it out
-        ShiftDigit(10);
-        ShiftDigit(10);
-        ShiftDigit(10);
+        for (unsigned char i = 0; i < 3; i++)
+            shiftOut(m_DataPin, m_ClockPin, MSBFIRST, AnimationFrames[m_AnimationStep][i]);
     }
 }
 
 void TemperaturePanel::ShiftDigit(unsigned char digit)
 {
     shiftOut(m_DataPin, m_ClockPin, MSBFIRST, NumberMap[digit]);
+}
+
+void TemperaturePanel::StepAnimation()
+{
+    if (m_AnimateRows == 0)
+        return;
+    m_AnimationStep++;
+    UpdateDisplay();
 }

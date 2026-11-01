@@ -9,6 +9,13 @@ public:
     void SetHighLow(int high, int low);
     void SetCurrent(int temp);
 
+    enum
+    {
+        ROW_HIGH = 1 << 0,
+        ROW_CURR = 1 << 1,
+        ROW_LOW = 1 << 2
+    };
+    void EnableAnimation(unsigned char whichRows) { m_AnimateRows |= whichRows; }
     void StepAnimation();
 
 private:
@@ -21,6 +28,9 @@ private:
     int m_High;
     int m_Current;
     int m_Low;
+
+    unsigned char m_AnimateRows;
+    unsigned char m_AnimationStep;
 
     void UpdateDisplay();
     void ShiftTemperature(int temp);

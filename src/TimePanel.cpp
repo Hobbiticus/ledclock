@@ -18,7 +18,6 @@ void TimePanel::Init()
     ledcAttachPin(m_EnablePin, m_PWMChannel);
     ledcSetup(m_ColonChannel, 5000, 8);
     ledcAttachPin(m_ColonPin, m_ColonChannel);
-
 }
 
 const static unsigned char STC = 1 << 5; //top center
@@ -63,6 +62,8 @@ void TimePanel::SetTime(int hours, int minutes)
     // Explicitly pull clock low after shifting finishes, then latch
     digitalWrite(m_ClockPin, LOW);
     digitalWrite(m_LatchPin, HIGH);
+
+    ledcWrite(m_ColonChannel, 255);
 }
 
 void TimePanel::StepWifiAnimation()
